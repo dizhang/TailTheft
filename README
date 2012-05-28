@@ -1,0 +1,16 @@
+TailTheft is a scheme that leverages the wasted tail for saving energy in cellular networks. 
+
+These codes are the simulative implementation of TailTheft in ns2, which also include implementation of other tail optimization approaches: TOP and TailEnder. 
+
+
+The main codes are listed below.
+
+ns-2.34_original-0.1.diff - patches for ns2, which include the eurane code and code wirtten by me.
+ns-2.34_tailtheft-0.1.diff - patches for original to simulate tailtheft
+ns-2.34_top-0.1.diff - patches for original to simulate top
+ns-2.34_tailender-0.1.diff - patches for original to simulate tailender
+
+
+For more information please read our paper: Leveraging the Wasted Time for Saving Energy in Cellular Networks.
+
+For questions and more detail information, please contact dizhang.thu@gmail.com.
