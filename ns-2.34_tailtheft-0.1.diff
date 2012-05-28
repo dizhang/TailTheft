@@ -1,0 +1,1268 @@
+diff -urN ns-allinone-2.34_org/ns-2.34/common/packet.h ns-allinone-2.34_tailtheft/ns-2.34/common/packet.h
+--- ns-allinone-2.34_org/ns-2.34/common/packet.h	2012-04-04 22:18:01.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/common/packet.h	2012-04-10 20:28:17.000000000 +0800
+@@ -204,12 +204,11 @@
+ static const packet_t PT_UMTSDL = 74;
+ static const packet_t PT_UMTSPF = 75;
+ static const packet_t PT_UMTSPR = 76;
+-static const packet_t PT_UMTSTP = 77;
+ // added by zhangdi end
+ // added by zhangdi 20120206
+-static const packet_t PT_BING = 78;
++static const packet_t PT_BING = 77;
+ // added by zhangdi 20120206 end
+-static packet_t       PT_NTYPE = 79; // This MUST be the LAST one
++static packet_t       PT_NTYPE = 78; // This MUST be the LAST one
+ 
+ enum packetClass
+ {
+@@ -350,7 +349,6 @@
+         name_[PT_UMTSDL] = "UMTSDL";
+         name_[PT_UMTSPF] = "UMTSPF";
+         name_[PT_UMTSPR] = "UMTSPR";
+-        name_[PT_UMTSTP] = "UMTSTP";
+         name_[PT_BING] = "bing";
+         // added by zhangdi end
+ 		name_[PT_INVAL]= "httpInval";
+diff -urN ns-allinone-2.34_org/ns-2.34/Makefile.in ns-allinone-2.34_tailtheft/ns-2.34/Makefile.in
+--- ns-allinone-2.34_org/ns-2.34/Makefile.in	2012-04-04 22:03:12.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/Makefile.in	2012-04-10 20:28:17.000000000 +0800
+@@ -181,7 +181,7 @@
+ 	tools/trafgen.o trace/traffictrace.o trace/mytracefile.o trace/mynhswap.o \
+ 	trace/umtsrt_traffictrace.o \
+ 	trace/umtsdl_traffictrace.o trace/umtspf_traffictrace.o trace/umtspr_traffictrace.o \
+-	trace/umtstp_traffictrace.o tools/pareto.o \
++	tools/pareto.o \
+ 	tools/expoo.o tools/cbr_traffic.o tools/poisson.o \
+ 	adc/tbf.o adc/resv.o adc/sa.o tcp/saack.o \
+ 	tools/measuremod.o adc/estimator.o adc/adc.o adc/ms-adc.o \
+diff -urN ns-allinone-2.34_org/ns-2.34/trace/cmu-trace.cc ns-allinone-2.34_tailtheft/ns-2.34/trace/cmu-trace.cc
+--- ns-allinone-2.34_org/ns-2.34/trace/cmu-trace.cc	2012-04-04 22:01:04.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/trace/cmu-trace.cc	2012-04-10 20:28:17.000000000 +0800
+@@ -1369,7 +1369,6 @@
+         case PT_UMTSDL:
+         case PT_UMTSPF:
+         case PT_UMTSPR:
+-        case PT_UMTSTP:
+             format_msg(p, offset);
+             break;
+         /* added by zhangdi end */
+diff -urN ns-allinone-2.34_org/ns-2.34/trace/trace.cc ns-allinone-2.34_tailtheft/ns-2.34/trace/trace.cc
+--- ns-allinone-2.34_org/ns-2.34/trace/trace.cc	2012-04-04 22:01:28.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/trace/trace.cc	2012-04-10 20:28:17.000000000 +0800
+@@ -199,7 +199,7 @@
+ 	/* UDP's now have seqno's too */
+ 	if (t == PT_RTP || t == PT_CBR || t == PT_UDP || t == PT_EXP ||
+ 	    t == PT_PARETO || t == PT_COOT || t == PT_POISSON || t == PT_UMTSRT ||
+-        t == PT_UMTSDL || t == PT_UMTSPF || t == PT_UMTSPR || t == PT_UMTSTP)
++        t == PT_UMTSDL || t == PT_UMTSPF || t == PT_UMTSPR)
+ 		seqno = rh->seqno();
+         else if (t == PT_RAP_DATA || t == PT_RAP_ACK)
+                 seqno = raph->seqno();
+diff -urN ns-allinone-2.34_org/ns-2.34/trace/umtstp_traffictrace.cc ns-allinone-2.34_tailtheft/ns-2.34/trace/umtstp_traffictrace.cc
+--- ns-allinone-2.34_org/ns-2.34/trace/umtstp_traffictrace.cc	2012-04-04 22:00:30.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/trace/umtstp_traffictrace.cc	1970-01-01 08:00:00.000000000 +0800
+@@ -1,104 +0,0 @@
+-#include <sys/types.h>
+-#include <sys/stat.h> 
+-#include <stdio.h>
+-
+-#include "config.h"
+-#ifdef HAVE_NETINET_IN_H
+-#include <netinet/in.h>
+-#endif /* HAVE_NETINET_IN_H */
+-
+-
+-#include "random.h"
+-#include "object.h"
+-#include "trafgen.h"
+-
+-#include "mytracefile.h"
+-
+-/* instance of a traffic generator.  has a pointer to the MytraceFile
+- * object and implements the interval() function.
+- */
+-
+-class UMTSTP_TrafficTrace : public TrafficGenerator {
+- public:
+-	UMTSTP_TrafficTrace();
+-	int command(int argc, const char*const* argv);
+-	virtual double next_interval(int &);
+- protected:
+-	void timeout();
+-	MytraceFile *tfile_;
+-	struct mytracerec trec_;
+-	int ndx_; /* pointer to current trace file record */
+-	void init();
+-};
+-
+-static class UMTSTP_TrafficTraceClass : public TclClass {
+- public:
+-	UMTSTP_TrafficTraceClass() : TclClass("Application/Traffic/UMTSTP_Trace") {}
+-	TclObject* create(int, const char*const*) {
+-	        return(new UMTSTP_TrafficTrace());
+-	}
+-} class_umtstp_traffictrace;
+-
+-UMTSTP_TrafficTrace::UMTSTP_TrafficTrace()
+-{
+-	tfile_ = (MytraceFile *)NULL;
+-}
+-
+-void UMTSTP_TrafficTrace::init()
+-{
+-	if (tfile_) {
+-		int setup_result = tfile_->setup();
+-		if (setup_result < 0) {
+-			abort();
+-		}
+-		else {			
+-			ndx_ = setup_result;
+-		}
+-	}
+-    
+-    if(agent_)
+-        agent_->set_pkttype(PT_UMTSTP);
+-}
+-
+-int UMTSTP_TrafficTrace::command(int argc, const char*const* argv)
+-{
+-	Tcl& tcl = Tcl::instance();
+-	
+-	if (argc == 3) {
+-		if (strcmp(argv[1], "attach-tracefile") == 0) {
+-			tfile_ = (MytraceFile *)TclObject::lookup(argv[2]);
+-			if (tfile_ == 0) {
+-				tcl.resultf("no such node %s", argv[2]);
+-				return(TCL_ERROR);
+-			}
+-			return(TCL_OK);
+-		}
+-	}
+-
+-	return (TrafficGenerator::command(argc, argv));
+-
+-}
+-
+-void UMTSTP_TrafficTrace::timeout()
+-{
+-        if (! running_)
+-                return;
+-
+-        /* send a packet */
+-	// Note:  May need to set "NEW_BURST" flag in sendmsg() for 
+-	// signifying a new talkspurt when using vat traces.
+-	// (see expoo.cc, tcl/ex/test-rcvr.tcl)
+-	agent_->sendmsg(size_);
+-        /* figure out when to send the next one */
+-        nextPkttime_ = next_interval(size_);
+-        /* schedule it */
+-        timer_.resched(nextPkttime_);
+-}
+-
+-
+-double UMTSTP_TrafficTrace::next_interval(int& size)
+-{
+-	tfile_->get_next(ndx_, trec_);
+-	size = trec_.mytrec_size;
+-	return(((double)trec_.mytrec_time)/1000000.0); /* usecs->secs */
+-}
+diff -urN ns-allinone-2.34_org/ns-2.34/umts/demuxer.cc ns-allinone-2.34_tailtheft/ns-2.34/umts/demuxer.cc
+--- ns-allinone-2.34_org/ns-2.34/umts/demuxer.cc	2012-04-05 21:34:05.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/umts/demuxer.cc	2012-04-19 10:35:05.000000000 +0800
+@@ -42,6 +42,13 @@
+ #include "demuxer.h"
+ #include "packet.h"
+ #include "mac.h"
++#include "mypacketqueue.h"
++#include "mydelaypacketqueue.h"
++#include "myprefetchpacketqueue.h"
++#include "mydppacketqueue.h"
++
++#include "transferdecision.h"
++#include "tcs.h"
+ 
+ using namespace std;
+ 
+@@ -58,9 +65,63 @@
+ 
+ class_Demuxer;
+ 
++void Delay_AfterNRT2RT_Timer::expire(Event *)
++{
++    d_->timeout(1);
++}
++
++/*void NRT_DelayTimer::expire(Event *)
++{
++    d_->timeout(100);
++}*/
++
++void NRT_IntervalTimer::expire(Event *)
++{
++    d_->timeout(8);
++}
++
++void NRT_IntervalTimer2::expire(Event *)
++{
++    d_->timeout(9);
++}
++
++// added by zhangdi 20120304 
++void NRT_IntervalTimer3::expire(Event *)
++{
++    d_->timeout(14);
++}
++
++void NRT_IntervalTimer4::expire(Event *)
++{
++    d_->timeout(15);
++}
++// added by zhangdi 20120304 end
++
++/*void NRT_RecoverTimer::expire(Event *)
++{
++    d_->timeout();
++}*/
++
++// added by zhangdi 20120221
++void Delay_Packet_Self_Start_Timer::expire(Event *)
++{
++    d_->timeout(10);
++}
++// added by zhangdi 20120221 end
++
++// added by zhangdi 20120304
++void Prefetch_Packet_Self_Start_Timer::expire(Event *)
++{
++    d_->timeout(16);
++}
++// added by zhangdi end 20120304
+ 
+-Demuxer::Demuxer():BiConnector(), ntype_(0), cs_(0)
++Demuxer::Demuxer():BiConnector(), ntype_(0), cs_(0), NRTIT(this), NRTIT2(this), NRTIT3(this), NRTIT4(this), DANRT2RT_Timer(this), DPSS_Timer(this), PPSS_Timer(this), total(0), sent(0)
+ {
++    //bind_time("NRT_DELAY_", &NRT_DELAY_);
++    //bind_time("NRT_INTERVAL_", &NRT_INTERVAL_);
++    //bind_time("NRT_RECOVER_", &NRT_RECOVER_);
++    srand(unsigned(time(NULL)));
+ }
+ 
+ int Demuxer::command(int argc, const char *const *argv)
+@@ -99,9 +160,58 @@
+             downtarget_ ? sendDown(p, h) : drop(p);
+         }
+         else if (ch->ptype() == PT_UMTSRT || ch->ptype() == PT_UMTSDL
+-            || ch->ptype() == PT_UMTSPF || ch->ptype() == PT_UMTSPR || ch->ptype() == PT_UMTSTP)
++            || ch->ptype() == PT_UMTSPF || ch->ptype() == PT_UMTSPR)
+         {
+-            uptarget_ ? sendUp(p, h) : drop(p);
++            if (ch->ptype() == PT_UMTSRT || ch->ptype() == PT_UMTSPR)
++            {
++                if (umts_isTransNRT_)
++                {
++                    this->timeout(0);
++                }
++
++                uptarget_ ? sendUp(p, h) : drop(p);
++
++                //cout << "RT received at: " << Scheduler::instance().clock() << endl;
++            } 
++            else if (ch->ptype() == PT_UMTSDL)
++            {
++                double tt = 0.0;
++                // first cancel the DPSS_Timer
++                if (DPSS_Timer.status() == TIMER_PENDING)
++                    DPSS_Timer.cancel();
++                //tt = mdpq_.enque(p, h, 500);
++                tt = mdpq_.enque(p, h, 1000);
++                // restart the DPSS_Timer again
++                DPSS_Timer.resched(tt);
++                //cout << "tt: " << tt << endl;
++                //total++;
++                
++                if (umts_isTransNRT_)
++                {
++                    if (umts_channel_ == 0 && NRTIT.status() == TIMER_IDLE)
++                        NRTIT.resched(0.00001);
++                    else if (umts_channel_ == 1 && NRTIT2.status() == TIMER_IDLE)
++                        NRTIT2.resched(0.00001);
++                }
++            }
++            else if (ch->ptype() == PT_UMTSPF)
++            {
++                double tt = 0.0;
++                // first cancel the DPSS_Timer
++                if (DPSS_Timer.status() == TIMER_PENDING)
++                    DPSS_Timer.cancel();
++                tt = mdpq_.enque(p, h, 1000);
++                // restart the DPSS_Timer again
++                DPSS_Timer.resched(tt);
++
++                if (umts_isTransNRT_)
++                {
++                    if(umts_channel_ == 0 && NRTIT.status() == TIMER_IDLE)
++                        NRTIT.resched(0.00001);
++                    else if (umts_channel_ == 1 && NRTIT2.status() == TIMER_IDLE)
++                        NRTIT2.resched(0.00001);
++                }
++            }
+         }
+         else
+         {
+@@ -122,4 +232,217 @@
+         }
+     }
+ }
++
++void Demuxer::timeout(int type)
++{
++    // type = 0, is for delay after changing NRT to RT transfer
++    if (type == 0)
++    {
++        // check the DANRT2RT_Timer's status for the delay, encase of resched two or more times
++        if (DANRT2RT_Timer.status() == TIMER_IDLE)
++            DANRT2RT_Timer.resched(0.1);
++
++        // when there is realtime data and the NRTIT timer is PENDING,
++        // the timer must be canceled
++        if (NRTIT.status() == TIMER_PENDING)
++            NRTIT.cancel();
++
++        // when there is realtime data and the NRTIT2 timer is PENDING,
++        // the timer must be canceled 
++        if (NRTIT2.status() == TIMER_PENDING)
++            NRTIT2.cancel();
++
++        // when there is realtime data and the NRTIT3 timer is PENDING, 
++        // the timer must be canceled
++        if (NRTIT3.status() == TIMER_PENDING)
++            NRTIT3.cancel();
++
++        // when there is realtime data and the NRTIT4 timer is PENDING,
++        // the timer must be canceled
++        if (NRTIT4.status() == TIMER_PENDING)
++            NRTIT4.cancel();
++    }// type = 1, is for DANRT2RT_Timer time out action
++    else if (type == 1)
++    {
++        umts_isTransNRT_ = false;
++    }// type = 2, is for NRT transfer after DS_DCH_Dtimer start
++    else if (type == 2)
++    {
++        NRTIT.resched(0.0001);
++    }// type = 3, is for NRT transfer after DS_COMMON_Dtimer start
++    else if (type == 3)
++    {
++        NRTIT2.resched(0.0002);
++    }// type = 8, is for NRT retransfer and the timer is NRTIT
++    else if (type == 8)
++    {
++        if (umts_isTransNRT_ && mdpq_.length() > 0)
++        {
++            if (DPSS_Timer.status() == TIMER_PENDING)
++                DPSS_Timer.cancel();
++
++            MyDPPacket ret;
++            double tt = 0.0;
++            tt = mdpq_.deque(&ret);
++            uptarget_ ? sendUp(ret.p, ret.h) : drop(ret.p);
++            
++            // here we must limit the send rate
++            if (tt >= 0.0 && tt <= 0.1)
++                DPSS_Timer.resched(0.1);
++            else if (tt > 0.1)
++                DPSS_Timer.resched(tt);
++            //cout << "tt: " << tt << endl;
++            //sent++;
++            //cout << "Sent: " << sent << ", length: " << mdpq_.length() << ", Timer: " << Scheduler::instance().clock() << endl;
++            NRTIT.resched(0.05);
++        }
++        else if (umts_isTransNRT_ && mdpq_.length() == 0)
++        {
++		    //cout << "T3" << endl;
++            // go to Timer T3 in paper
++            cs_->timeout(19);
++            NRTIT.resched(0.05);
++        }
++    }// type = 9, is for NRT retransfer and the timer is NRTIT2
++    else if (type == 9)
++    {
++        if (umts_isTransNRT_ && mdpq_.length() > 0)
++        {
++            if (umts_UL_canTransNRT_ && umts_DL_canTransNRT_)
++            {
++                if(DPSS_Timer.status() == TIMER_PENDING)
++                    DPSS_Timer.cancel();
++
++                MyDPPacket ret;
++                double tt = 0.0;
++                tt = mdpq_.deque(&ret);
++                uptarget_ ? sendUp(ret.p, ret.h) : drop(ret.p);
++                
++                if (tt >= 0.0 && tt <= 1.5)
++                    DPSS_Timer.resched(1.5);
++                else if (tt > 1.5)
++                    DPSS_Timer.resched(tt);
++            }
++
++            //cout << "tt: " << tt << endl;
++            //sent++;
++            //cout << "Sent: " << sent << ", length: " << mdpq_.length() << ", Time: " << Scheduler::instance().clock() << endl;
++            NRTIT2.resched(0.05);
++        }
++    }// type = 10, is for Delay packet self start transfer because of timeout of the limit queue time
++    else if (type == 10)
++    {
++        // here we must consider the state of channel, if not the packet will
++        // be loss for sening too fast
++        // when the channel is idle, the packet will not loss
++        
++        MyDPPacket ret;
++        double tt = 0.0;
++        tt = mdpq_.deque(&ret);
++        uptarget_ ? sendUp(ret.p, ret.h) : drop(ret.p);
++
++        if (umts_channel_ == 0) // in tail and the channel is dedicated
++        {
++            if (tt >= 0.0 && tt <= 0.05)
++                DPSS_Timer.resched(0.05);
++            else if (tt > 0.05)
++                DPSS_Timer.resched(tt);
++        }
++        else if (umts_channel_ == 1) // in tail and the channel is common
++        {
++            if (tt >= 0.0 && tt <= 1.5)
++                DPSS_Timer.resched(1.5);
++            else if (tt > 1.5)
++                DPSS_Timer.resched(tt);
++        }
++        else if (umts_channel_ == 2) // while the channel is idle, the umts_istranNRT is false
++        {
++            if (tt >= 0.0 && tt <= 1)
++                DPSS_Timer.resched(1);
++            else if (tt > 1)
++                DPSS_Timer.resched(tt);
++        }
++
++        //cout << "tt: " << tt << endl;
++        //sent++;
++        //cout << "DPSS Sent: " << sent << ", length: " << mdpq_.length() << ", Time: " << Scheduler::instance().clock() << endl;
++    }// type == 14, is for NRT retransfer and the timer is NRTIT3
++    else if (type == 14)
++    {
++        if (umts_isTransNRT_ && prefetchq_.length() > 0)
++        {
++            if (PPSS_Timer.status() == TIMER_PENDING)
++                PPSS_Timer.cancel();
++
++            MyPrefetchPacket ret;
++            double tt = 0.0;
++            tt = prefetchq_.deque(&ret);
++            uptarget_ ? sendUp(ret.p, ret.h) : drop(ret.p);
++
++            // here we must limit the send rate
++            if (tt >= 0.0 && tt <= 0.1)
++                PPSS_Timer.resched(0.1);
++            else if (tt > 0.1)
++                PPSS_Timer.resched(tt);
++
++            NRTIT3.resched(0.05);
++        }
++    }// type == 15, is for NRT retransfer and the timer is NRTIT4
++    else if (type == 15)
++    {
++        if (umts_isTransNRT_ && prefetchq_.length() > 0)
++        {
++            if (umts_UL_canTransNRT_ && umts_DL_canTransNRT_)
++            {
++                if (PPSS_Timer.status() == TIMER_PENDING)
++                    PPSS_Timer.cancel();
++
++                MyPrefetchPacket ret;
++                double tt = 0.0;
++                tt = prefetchq_.deque(&ret);
++                uptarget_ ? sendUp(ret.p, ret.h) : drop(ret.p);
++
++                if (tt >= 0.0 && tt <= 1.5)
++                    PPSS_Timer.resched(1.5);
++                else if (tt > 1.5)
++                    PPSS_Timer.resched(tt);
++            }
++
++            NRTIT4.resched(0.05);
++        }
++    }// type == 16, is  for Prefetch Packet self start transfer because of the timeout of the limit prefetch time
++    else if (type == 16)
++    {
++        // here we must consider the state of channel, if not the packet will
++        // be loss for sending too fast
++        // when the channel is idle, the packet will not loss for the umts_isTransNRT_ is false
++
++        MyPrefetchPacket ret;
++        double tt = 0.0;
++        tt = prefetchq_.deque(&ret);
++        uptarget_ ? sendUp(ret.p, ret.h) : drop(ret.p);
++
++        if (umts_channel_ == 0) // in tail and the channel is dedicated
++        {
++            if (tt >= 0.0 && tt <= 0.05)
++                PPSS_Timer.resched(0.05);
++            else if (tt > 0.05)
++                PPSS_Timer.resched(tt);
++        }
++        else if (umts_channel_ == 1) // in tail and the channel is common
++        {
++            if (tt >= 0.0 && tt <= 1.5)
++                PPSS_Timer.resched(1.5);
++            else if (tt > 1.5)
++                PPSS_Timer.resched(tt);
++        }
++        else if (umts_channel_ == 2) // while the channel is idle, the umts_isTransNRT_ is false
++        {
++            if (tt >= 0.0 && tt <= 1)
++                PPSS_Timer.resched(1);
++            else if (tt > 1)
++                PPSS_Timer.resched(tt);
++        }
++    }
++}
+ 
+diff -urN ns-allinone-2.34_org/ns-2.34/umts/demuxer.h ns-allinone-2.34_tailtheft/ns-2.34/umts/demuxer.h
+--- ns-allinone-2.34_org/ns-2.34/umts/demuxer.h	2012-04-05 21:37:24.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/umts/demuxer.h	2012-04-10 20:28:17.000000000 +0800
+@@ -48,12 +48,121 @@
+ #define ns_demuxer_h
+ 
+ #include "bi-connector.h"
++#include "mypacketqueue.h"
++#include "mydelaypacketqueue.h"
++#include "myprefetchpacketqueue.h"
++#include "mydppacketqueue.h"
+ #include "timer-handler.h"
+-#include "tcs.h"
+ 
+ class Demuxer;
+ class CS;
+ 
++// added by zhangdi
++/*class NRT_DelayTimer:public TimerHandler
++{
++public:
++    NRT_DelayTimer(Demuxer * d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event * e);
++    Demuxer     * d_;
++};*/
++
++class NRT_IntervalTimer:public TimerHandler
++{
++public:
++    NRT_IntervalTimer(Demuxer * d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event * e);
++    Demuxer     * d_;
++};
++
++class NRT_IntervalTimer2:public TimerHandler
++{
++public:
++    NRT_IntervalTimer2(Demuxer *d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event * e);
++    Demuxer     * d_;
++};
++
++// added by zhangdi 20120304
++class NRT_IntervalTimer3:public TimerHandler
++{
++public:
++    NRT_IntervalTimer3(Demuxer *d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event *e);
++    Demuxer     * d_;
++};
++
++class NRT_IntervalTimer4:public TimerHandler
++{
++public: 
++    NRT_IntervalTimer4(Demuxer *d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event *e);
++    Demuxer     * d_;
++};
++// added by zhangdi end 20120304
++
++/*class NRT_RecoverTimer:public TimerHandler
++{
++public:
++    NRT_RecoverTimer(Demuxer * d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event * e);
++    Demuxer     * d_;
++};*/
++
++class Delay_AfterNRT2RT_Timer:public TimerHandler
++{
++public:
++    Delay_AfterNRT2RT_Timer(Demuxer *d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event * e);
++    Demuxer     * d_;
++};
++
++// added by zhangdi 20120221
++class Delay_Packet_Self_Start_Timer: public TimerHandler
++{
++public:
++    Delay_Packet_Self_Start_Timer(Demuxer *d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event * e);
++    Demuxer     * d_;
++};
++// added by zhangdi end 20120221
++
++// added by zhangdi 20120304
++class Prefetch_Packet_Self_Start_Timer: public TimerHandler
++{
++public:
++    Prefetch_Packet_Self_Start_Timer(Demuxer *d):TimerHandler()
++    {
++        d_ = d;
++} protected:
++    virtual void expire(Event * e);
++    Demuxer     * d_;
++};
++// added by zhangdi end 20120304
++
+ class Demuxer:public BiConnector
+ {
+ public:
+@@ -61,9 +170,34 @@
+ 
+     int       command(int argc, const char *const *argv);
+     void        recv(Packet *, Handler * callback = 0);
++    virtual void timeout(int type);
+ 
+-    int ntype_; // rnc: 1, bs: 2, ue: 3
++    //double NRT_DELAY_;
++    //double NRT_INTERVAL_;
++    //double NRT_RECOVER_;
++
++    int ntype_; // rnc: 0, bs: 1, ue: 2 and bigger
+     CS  *cs_;
++
++    MyPacketQueue realtimeq_;
++    MyDelayPacketQueue delayq_;
++    MyPrefetchPacketQueue prefetchq_;
++    MyDPPacketQueue mdpq_;
++
++    //NRT_DelayTimer     NRTDT;
++    NRT_IntervalTimer  NRTIT;
++    NRT_IntervalTimer2 NRTIT2;
++    NRT_IntervalTimer3 NRTIT3;
++    NRT_IntervalTimer4 NRTIT4;
++    //NRT_RecoverTimer   NRTRT;
++
++    Delay_AfterNRT2RT_Timer DANRT2RT_Timer;
++
++    Delay_Packet_Self_Start_Timer DPSS_Timer;
++    // added by zhangdi 20120304
++    Prefetch_Packet_Self_Start_Timer PPSS_Timer;
++    int total;
++    int sent;
+ };
+ 
+ #endif
+diff -urN ns-allinone-2.34_org/ns-2.34/umts/tcs.cc ns-allinone-2.34_tailtheft/ns-2.34/umts/tcs.cc
+--- ns-allinone-2.34_org/ns-2.34/umts/tcs.cc	2012-04-19 10:20:31.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/umts/tcs.cc	2012-04-19 10:36:57.000000000 +0800
+@@ -44,6 +44,7 @@
+ #include "mac.h"
+ 
+ #include "demuxer.h"
++#include "transferdecision.h"
+ 
+ #include <iostream>
+ 
+@@ -114,18 +115,46 @@
+ }
+ // added by zhangdi 20120217 end
+ 
++// added by zhangdi 20120307
++void My_Buff_Check_Timer::expire(Event *)
++{
++    a_->timeout(4);
++}
++// added by zhangdi 20120307 end
++// added by zhangdi 20120401 start
++void Wait_Before_FastD_Timer::expire(Event *)
++{
++    a_->timeout(9);
++}
++
++void Wait_Before_FD_Timer_Three1::expire(Event *)
++{
++    a_->timeout(19);
++}
++
++void Wait_Before_FD_Timer_Three2::expire(Event *)
++{
++    a_->timeout(20);
++}
++
++void TailTheft_Timer_Three::expire(Event *)
++{
++    a_->timeout(21);
++}
++
+ // added by zhangdi 20120416 start
+-void Pending_Before_IDLE_to_DCH::expire(Event *e)
++void Pending_Before_IDLE_to_DCH::expire(Event *)
+ {
+     a_->timeout(30);
+ }
+ 
+-void Pending_Before_FACH_to_DCH::expire(Event *e)
++void Pending_Before_FACH_to_DCH::expire(Event *)
+ {
+     a_->timeout(31);
+ }
+ // added by zhangdi 20120416 end
+ 
++// added by zhangdi 20120401 end
+ void Thp_Report_Timer::expire(Event *)
+ {
+     a_->timeout(0);
+@@ -147,7 +176,7 @@
+ }
+ 
+ TCM::TCM():BiConnector(), bs_(0), direction_(0), total_bits_(0), status_(0), cs_(0), am_(NULL), um_(NULL),
+-    THP_RT(this), RPT(this), BRT(this), PTAT(this)
++    THP_RT(this), RPT(this), BRT(this), PTAT(this), MBRT(this)
+ {
+ 
+     bind_time("THP_REPORT_INTERVAL_", &THP_REPORT_INTERVAL_);
+@@ -164,6 +193,8 @@
+ 
+     BRT.resched(BUFF_CHECK_INTERVAL_);
+     THP_RT.resched(THP_REPORT_INTERVAL_);
++
++    MBRT.resched(MY_BUFF_CHECK_INTERVAL_);
+ }
+ 
+ int TCM::command(int argc, const char *const *argv)
+@@ -281,7 +312,8 @@
+     }
+     else if (tno == 1)
+     {
+-        cs_->timeout(0);
++        if (!umts_isTransNRT_)
++            cs_->timeout(0);
+     }
+     else if (tno == 2)
+     {
+@@ -310,13 +342,16 @@
+         {
+             if (size > 0 && size <= DL_RLC_BUF_UPSWITCH_THRESH_sRAB_)
+             {
+-                cs_->timeout(6);
++                if (!umts_isTransNRT_)
++                    cs_->timeout(6);
+                 
+                 PTAT.resched(PENDING_TIME_AFTER_TRIGGER_);
+             }
+             else if (size > DL_RLC_BUF_UPSWITCH_THRESH_sRAB_)
+             {
+-                cs_->timeout(7);
++                //cout << "isTransNRT:" <<  umts_isTransNRT_ <<  ", bsup2, " << size << endl;
++                if (!umts_isTransNRT_)
++                    cs_->timeout(7);
+                 
+                 PTAT.resched(PENDING_TIME_AFTER_TRIGGER_);
+             }
+@@ -327,13 +362,16 @@
+         }
+         else if (size > 0 && size <= UL_RLC_BUF_UPSWITCH_THRESH_sRAB_)
+         {
+-            cs_->timeout(6);
++            if (!umts_isTransNRT_)
++                cs_->timeout(6);
+             
+             PTAT.resched(PENDING_TIME_AFTER_TRIGGER_);
+         }
+         else if (size > UL_RLC_BUF_UPSWITCH_THRESH_sRAB_)
+         {
+-            cs_->timeout(7);
++            //cout << "isTransNRT:" << umts_isTransNRT_ << ", ueup2, " << size << endl;
++            if (!umts_isTransNRT_)
++                cs_->timeout(7);
+             
+             PTAT.resched(PENDING_TIME_AFTER_TRIGGER_);
+         }
+@@ -346,10 +384,55 @@
+     {
+         BRT.resched(BUFF_CHECK_INTERVAL_);
+     }
++    else if (tno == 4)
++    {
++        int size = 0;
++        
++        if (am_ != NULL)
++        {
++            size =am_->buff_size() / 100;
++            if ((am_->buff_size() % 100) > 50)
++            {
++                size++;
++            }
++        }
++        else if (um_ != NULL)
++        {
++            size =um_->buff_size() / 100;
++            if ((um_->buff_size() % 100) > 50)
++            {
++                size++;
++            }
++        }
++
++        size = size * 100;
++
++        if (bs_)
++        {
++            if (size > 0 && size <= DL_RLC_BUF_UPSWITCH_THRESH_sRAB_)
++            {
++                umts_DL_canTransNRT_ = true;
++            }
++            else if (size > DL_RLC_BUF_UPSWITCH_THRESH_sRAB_)
++            {
++                umts_DL_canTransNRT_ = false;
++            }
++        }
++        else if (size > 0 && size <= UL_RLC_BUF_UPSWITCH_THRESH_sRAB_)
++        {
++            umts_UL_canTransNRT_ = true;
++        }
++        else if (size > UL_RLC_BUF_UPSWITCH_THRESH_sRAB_)
++        {
++            umts_UL_canTransNRT_ = false;
++        }
++
++        MBRT.resched(MY_BUFF_CHECK_INTERVAL_);
++    }
+ }
+ 
+ 
+-CS::CS():NsObject(), uplink_(0), downlink_(0), bs_demuxer_(0), ue_demuxer_(0), uplink_am_(NULL), downlink_am_(NULL), downlink_um_(NULL), uplink_um_(NULL),DS_T_sRab(this), DS_DCH_Dtimer(this), DS_COMMON_Dtimer(this), PBDDT(this), PBCDT(this), PBI2D(this), PBF2D(this) 
++CS::CS():NsObject(), uplink_(0), downlink_(0), bs_demuxer_(0), ue_demuxer_(0), uplink_am_(NULL), downlink_am_(NULL), downlink_um_(NULL), uplink_um_(NULL),DS_T_sRab(this), DS_DCH_Dtimer(this), DS_COMMON_Dtimer(this), PBDDT(this), PBCDT(this), myflag(0), WBFT(this), WBFDTT1(this), WBFDTT2(this), TTTT(this), PBI2D(this), PBF2D(this)
+ {
+     bind_time("DOWNSWITCH_TIMER_sRAB_", &DOWNSWITCH_TIMER_sRAB_);
+     bind_time("DOWNSWITCH_DCH_DELAY_", &DOWNSWITCH_DCH_DELAY_);
+@@ -520,6 +603,21 @@
+             if (DS_DCH_Dtimer.status() == TIMER_IDLE)
+             {
+                 DS_DCH_Dtimer.resched(DOWNSWITCH_DCH_DELAY_ + 0.00001);
++                //added on 20120116 by zhangdi
++                // modified by zhangdi 20120130
++                umts_isTransNRT_ = true;
++                ue_demuxer_->timeout(2);
++                //added on 20120116 end
++                myflag = false;
++
++                if (WBFT.status() ==TIMER_PENDING)
++                    WBFT.cancel();
++            }// if there is new realtime data and the DCH timer
++	    // is started, we downswitch to common state
++            else if (DS_DCH_Dtimer.status() == TIMER_PENDING)
++            {
++                if (uplink_->status() == 2 && downlink_->status() == 2)
++                    myflag = true;
+             }
+         }
+         else if (uplink_->direction() == common
+@@ -528,6 +626,10 @@
+             if (DS_COMMON_Dtimer.status() == TIMER_IDLE)
+             {
+                 DS_COMMON_Dtimer.resched(DOWNSWITCH_COMMON_DELAY_ + 0.00001);
++                // added on 20120204 by zhangdi
++                umts_isTransNRT_ = true;
++                ue_demuxer_->timeout(3);
++                // added on 20120204 end 
+             }
+         }
+         DS_T_sRab.resched(DOWNSWITCH_TIMER_sRAB_ + 0.00001);
+@@ -543,27 +645,151 @@
+     }
+     else if (type == 4)
+     {
+-        uplink_->direction() = common;
+-        downlink_->direction() = common;
++        // added by zhangdi 20120202
++        if (ue_demuxer_->NRTIT.status() == TIMER_PENDING)
++            ue_demuxer_->NRTIT.cancel();
++
++        // if the DCH timer timeout, and the WBFDTT2 is started
++        // it must be canceled
++        if (WBFDTT2.status() == TIMER_PENDING)
++            WBFDTT2.cancel();
++    
++        // we can add some delay here, then change the channel
++        umts_isTransNRT_ = false;
++        // added by zhangdi 20120202 end
++
++        // modify by zhangdi 20120401
++        // if myflag is true demtion from DCH to FACH triggered
++        if (myflag)
++        {   
++            uplink_->direction() = common;
++            downlink_->direction() = common;
++
++            umts_channel_ = common;
++
++            //added by zhangdi 20120405
++            cout << "st\t" << "d2f\t" << Scheduler::instance().clock() << endl;
++            //added by zhangdi 20120405 end
++
++            if (uplink_am_ != NULL && downlink_am_ != NULL)
++            {
++                uplink_am_->CSwitch(ds_node_bw_, ds_node_tti_);
++                downlink_am_->CSwitch(ds_bs_bw_, ds_bs_tti_);
++            }
++            else if (uplink_um_ != NULL && downlink_um_ != NULL)
++            {
++                uplink_um_->CSwitch(ds_node_bw_, ds_node_tti_);
++                downlink_um_->CSwitch(ds_bs_bw_, ds_bs_tti_);
++            }
++        }
++        else 
++        {
++            WBFT.resched(0.01);
++            maxwait = 100;
++        }
++    }// type = 9 is for Wait_Before_FastD_Timer, added by zhangdi 20120204
++    // just do fast dormancy after there is no data in buffer
++    else if (type == 9)
++    {
++        if (uplink_am_->buff_size() == 0 && downlink_am_->buff_size() == 0)
++        {
++            uplink_->direction() = idle;
++            downlink_->direction() = idle;
++
++            umts_channel_ = idle;
+ 
+-        cout << "st\t" << "d2f\t" << Scheduler::instance().clock() << endl;
++            cout << "st\t" << "d2i\t" << Scheduler::instance().clock() << endl;
+ 
+-        if (uplink_am_ != NULL && downlink_am_ != NULL)
++            // I think the below we can not add
++		    if ( uplink_am_ != NULL && downlink_am_ !=NULL )
++		    {
++		        uplink_am_->CSwitch(0.001, 1);
++		        downlink_am_->CSwitch(0.001, 1);
++		    }
++		    else if (uplink_um_ != NULL && downlink_um_ != NULL)
++		    {
++		        uplink_um_->CSwitch(0.001, 1);
++		        downlink_um_->CSwitch(0.001, 1);
++		    }
++        }
++        else if(maxwait--)
+         {
+-            uplink_am_->CSwitch(ds_node_bw_, ds_node_tti_);
+-            downlink_am_->CSwitch(ds_bs_bw_, ds_bs_tti_);
++            WBFT.resched(0.01);
++        }
++    }// just a timer before type == 20, to set t3maxwait
++    else if (type == 19)
++    {
++        if (WBFDTT2.status() == TIMER_IDLE)
++        {
++            t3maxwait = 15;
++            WBFDTT2.resched(0.00001);
++        }
++    }
++    // type == 20 wait before fast dormancy for timer three in paper T3
++    else if (type == 20)
++    {
++        // we monitoring the buff for T3 time, if it is always empty
++        // do fast dormancy
++        if (uplink_am_->buff_size() == 0 && downlink_am_->buff_size() == 0)
++        {
++            if (t3maxwait--)
++                WBFDTT2.resched(0.1);
++            else
++                TTTT.resched(0.00001);
++        }
++    } // type == 21 just do fast dormancy operation from DCH to IDLE state
++    else if (type == 21)
++    {
++        // copy below code from DCH Dtimer timeout
++        if (ue_demuxer_->NRTIT.status() == TIMER_PENDING)
++            ue_demuxer_->NRTIT.cancel();
++
++        // if we do fast dormancy, now the dch timer is started
++        // and we must cancel it
++	    if (DS_DCH_Dtimer.status() == TIMER_PENDING)
++            DS_DCH_Dtimer.cancel();	    
++
++        // this must be set for cancel DCH tail transfer and restart 
++        // the status monitoring
++	    umts_isTransNRT_ = false;
++
++        //cout << "TTTT timeout" << endl;
++        // just do fast dormancy from DCH to IDLE, for this time is 
++        // only invoke when the channel is in DCH state
++        uplink_->direction() = idle;
++        downlink_->direction() = idle;
++
++        umts_channel_ = idle;
++
++        cout << "st\t" << "d2i\t" << Scheduler::instance().clock() << endl;
++
++        // I think the below we can not add
++        if ( uplink_am_ != NULL && downlink_am_ !=NULL )
++        {
++            uplink_am_->CSwitch(0.001, 1);
++            downlink_am_->CSwitch(0.001, 1);
+         }
+         else if (uplink_um_ != NULL && downlink_um_ != NULL)
+         {
+-            uplink_um_->CSwitch(ds_node_bw_, ds_node_tti_);
+-            downlink_um_->CSwitch(ds_bs_bw_, ds_bs_tti_);
++            uplink_um_->CSwitch(0.001, 1);
++            downlink_um_->CSwitch(0.001, 1);
+         }
+     }
+     else if (type == 5)
+     {
++        // added on 20120204 by zhangdi
++        if (ue_demuxer_->NRTIT2.status() == TIMER_PENDING)
++            ue_demuxer_->NRTIT2.cancel();
++
++        // we can add some delay here, then change the channel to idle
++        umts_isTransNRT_ = false;
++        // added 20120204 end 
++       
+         uplink_->direction() = idle;
+         downlink_->direction() = idle;
+ 
++        umts_channel_ = idle;
++
+         cout << "st\t" << "f2i\t" << Scheduler::instance().clock() << endl;
+ 
+         // I think the below we can not add
+@@ -587,7 +813,8 @@
+ 
+         if (uplink_->direction() == idle && downlink_->direction() == idle)
+         {
+-            // must check the status of this timer
++            // add some delay before real upswitch from 
++            // IDLE to DCH and must check the status of this timer
+             if (PBI2D.status() == TIMER_IDLE)
+ 	    {
+                 PBI2D.resched(2);
+@@ -615,9 +842,10 @@
+             {
+                 DS_COMMON_Dtimer.cancel();
+             }
+-           
+-            // must check the status of this timer
+-            if (PBF2D.status() == TIMER_IDLE)
++
++            // add some delay before real upswitch
++            // and must check of status of this timer
++            if (PBF2D.status() == TIMER_PENDING)
+ 	    {
+                 PBF2D.resched(0.75);
+ 		cout << "st\t" << "p2s\t" << Scheduler::instance().clock() << endl;
+@@ -625,14 +853,15 @@
+         }
+         else if (uplink_->direction() == idle && downlink_->direction() == idle)
+         {
+-            // must check the status of this timer
++            // add some delay before real upswitch
++            // add must check the status of this timer
+             if (PBI2D.status() == TIMER_IDLE)
+ 	    {
+                 PBI2D.resched(2);
+ 		cout << "st\t" << "p1s\t" << Scheduler::instance().clock() << endl;
+ 	    }
+         }
+-    } // type == 30 is for some delay before IDLE to DCH
++    } // type == 30 is for some delay before IDEL to DCH
+     else if (type == 30)
+     {
+ 	cout << "st\t" << "p1e\t" << Scheduler::instance().clock() << endl;
+@@ -640,6 +869,8 @@
+         uplink_->direction() = dedicated;
+         downlink_->direction() = dedicated;
+ 
++        umts_channel_ = dedicated;
++
+         cout << "st\t" << "i2d\t" << Scheduler::instance().clock() << endl;
+ 
+         if ( uplink_am_ != NULL && downlink_am_ !=NULL )
+@@ -652,7 +883,7 @@
+             uplink_um_->CSwitch(us_node_bw_, us_node_tti_);
+             downlink_um_->CSwitch(us_bs_bw_, us_bs_tti_);
+         }
+-    } // type == 31 is for some delay before FACH to DCH
++    }
+     else if (type == 31)
+     {
+ 	cout << "st\t" << "p2e\t" << Scheduler::instance().clock() << endl;
+@@ -660,6 +891,8 @@
+         uplink_->direction() = dedicated;
+         downlink_->direction() = dedicated;
+ 
++        umts_channel_ = dedicated;
++
+         cout << "st\t" << "f2d\t" << Scheduler::instance().clock() << endl;
+ 
+         if ( uplink_am_ != NULL && downlink_am_ !=NULL )
+diff -urN ns-allinone-2.34_org/ns-2.34/umts/tcs.h ns-allinone-2.34_tailtheft/ns-2.34/umts/tcs.h
+--- ns-allinone-2.34_org/ns-2.34/umts/tcs.h	2012-04-16 14:10:42.000000000 +0800
++++ ns-allinone-2.34_tailtheft/ns-2.34/umts/tcs.h	2012-04-16 11:31:26.000000000 +0800
+@@ -116,7 +116,60 @@
+     CS      *a_;
+ };
+ // added by zhangdi 20120217 end
++// added by zhangdi end
++
++// added by zhangdi 20120401 start
++class Wait_Before_FastD_Timer:public TimerHandler
++{
++public:
++    Wait_Before_FastD_Timer(CS *a):TimerHandler()
++    {
++        a_ = a;
++} protected:
++    virtual void expire(Event *e);
++    CS      *a_;
++};
++// added by zhangdi 20120401 end
++//
++// added by zhangdi 20120410
++//
++class Wait_Before_FD_Timer_Three1:public TimerHandler
++{
++public:
++    Wait_Before_FD_Timer_Three1(CS *a):TimerHandler()
++    {
++        a_ = a;
++} protected:
++    virtual void expire(Event *e);
++    CS      *a_;
++};
++
++class Wait_Before_FD_Timer_Three2:public TimerHandler
++{
++public:
++    Wait_Before_FD_Timer_Three2(CS *a):TimerHandler()
++    {
++        a_ = a;
++} protected:
++    virtual void expire(Event *e);
++    CS      *a_;
++};
++
++class TailTheft_Timer_Three:public TimerHandler
++{
++public:
++    TailTheft_Timer_Three(CS *a):TimerHandler()
++    {
++        a_ = a;
++} protected:
++    virtual void expire(Event *e);
++    CS      *a_;
++};
++// added by zhangdi 20120410 end
++
+ // added by zhangdi 20120416 start
++// added this for some delay before real upswtich from IDEL to DCH
++// and from FACH to DCH, just for interactive time analysis
+ 
+ class Pending_Before_IDLE_to_DCH:public TimerHandler
+ {
+@@ -127,7 +180,6 @@
+ } protected:
+     virtual void expire(Event *e);
+     CS      *a_;
+-
+ };
+ 
+ class Pending_Before_FACH_to_DCH:public TimerHandler
+@@ -143,8 +195,20 @@
+ 
+ // added by zhangdi 20120416 end
+ 
+-// added by zhangdi end
+-
++// added by zhangdi 20120307
++// added this for my check of buffer to decide transfer in FACH
++// for not trigger promotion
++class My_Buff_Check_Timer:public TimerHandler
++{
++public:
++    My_Buff_Check_Timer(TCM * a):TimerHandler()
++    {
++        a_ = a;
++} protected:
++    virtual void expire(Event * e);
++    TCM     *a_;
++};
++// added by zhangdi 20120307 end
+ 
+ class Thp_Report_Timer:public TimerHandler
+ {
+@@ -234,13 +298,20 @@
+     Pending_Before_DCH_Down_Timer PBDDT;
+     Pending_Before_COMMON_Down_Timer PBCDT;
+     // added by zhangdi 20120217 end
+-    
+-    // added by zhangdi 20120416 start
++    // added by zhangdi 20120401
++    bool myflag;
++    int maxwait;
++    int t3maxwait;
++    Wait_Before_FastD_Timer WBFT;
++    // added by zhangdi 20120401
++    Wait_Before_FD_Timer_Three1 WBFDTT1;
++    Wait_Before_FD_Timer_Three2 WBFDTT2;
++    TailTheft_Timer_Three TTTT;
++
++    // added by zhangdi 20120416
+     Pending_Before_IDLE_to_DCH PBI2D;
+     Pending_Before_FACH_to_DCH PBF2D;
+     // added by zhangdi 20120416 end
+-
+-
+ };
+ 
+ class TCM:  public BiConnector
+@@ -294,6 +365,10 @@
+     Report_Processing_Timer RPT;
+     Buff_Check_Timer BRT;
+     Pending_Timer PTAT;
++
++    // added by zhangdi 20120307
++    My_Buff_Check_Timer MBRT;
++    // added by zhangdi 20120307 end
+ };
+ 
+ #endif

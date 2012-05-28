@@ -1,0 +1,27 @@
+
+1. Download ns2 from website: http://sourceforge.net/projects/nsnam/files/allinone/ns-allinone-2.34/. The version of ns2 that we used is 2.34. Unpack it.
+
+~> tar zxvf ns-allinone-2.34.tar.gz
+
+2. Then patch the original patch to ns2. Note that the patch file include code from Eurane and code modified by dizhang. After doing this patch, you can get a simulative environment with tail mechanism, but without tail transmission.
+
+~> patch -p0 <ns-2.34_original-0.1.diff
+
+3. On the basis of implementation of tail mechanism, we implement TailTheft, TOP, and TailEnder. To get these codes work, you should follow these commands.
+
+~> mv ns-allinone-2.34 ns-allinone-2.34_bk
+~> cp -r ns-allinone-2.34_bk ns-allinone-2.34_org
+~> patch -p0 <ns-2.34_tailtheft-0.1.diff
+~> mv ns-allinone-2.34_org ns-allione-2.34_tailtheft
+
+~> cp -r ns-allinone-2.34_bk ns-allinone-2.34_org
+~> patch -p0 <ns-2.34_top-0.1.diff
+~> mv ns-allinone-2.34_org ns-allione-2.34_top
+
+~> cp -r ns-allinone-2.34_bk ns-allinone-2.34_org
+~> patch -p0 <ns-2.34_tailender-0.1.diff
+~> mv ns-allinone-2.34_org ns-allione-2.34_tailender
+
+4. After previous work, you get all the simulative environments. Before you use ns2, you must install it. Then just run the simulation you need.
+
+For more information and questions, please contact dizhang.thu@gmail.com.

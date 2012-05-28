@@ -1,0 +1,216 @@
+diff -urN ns-allinone-2.34_org/ns-2.34/umts/demuxer.cc ns-allinone-2.34_top/ns-2.34/umts/demuxer.cc
+--- ns-allinone-2.34_org/ns-2.34/umts/demuxer.cc	2012-04-05 21:34:05.000000000 +0800
++++ ns-allinone-2.34_top/ns-2.34/umts/demuxer.cc	2012-04-19 21:00:40.000000000 +0800
+@@ -101,7 +101,20 @@
+         else if (ch->ptype() == PT_UMTSRT || ch->ptype() == PT_UMTSDL
+             || ch->ptype() == PT_UMTSPF || ch->ptype() == PT_UMTSPR || ch->ptype() == PT_UMTSTP)
+         {
+-            uptarget_ ? sendUp(p, h) : drop(p);
++            if (ch->ptype() == PT_UMTSRT || ch->ptype() == PT_UMTSDL
++                || ch->ptype() == PT_UMTSPF || ch->ptype() == PT_UMTSPR)
++            {
++                uptarget_ ? sendUp(p, h) : drop(p);
++            } 
++            else if (ch->ptype() == PT_UMTSTP)
++            {
++                drop(p);
++                //invoke fast dormancy for TOP simulation
++                if (ntype_ == 3)
++                {
++                    cs_->timeout(8);
++                }
++            }
+         }
+         else
+         {
+diff -urN ns-allinone-2.34_org/ns-2.34/umts/tcs.cc ns-allinone-2.34_top/ns-2.34/umts/tcs.cc
+--- ns-allinone-2.34_org/ns-2.34/umts/tcs.cc	2012-04-19 10:20:31.000000000 +0800
++++ ns-allinone-2.34_top/ns-2.34/umts/tcs.cc	2012-04-19 21:00:32.000000000 +0800
+@@ -114,18 +114,26 @@
+ }
+ // added by zhangdi 20120217 end
+ 
++// added by zhangdi 20120401 start
++void Wait_Before_FastD_Timer::expire(Event *)
++{
++    a_->timeout(9);
++}
++// added by zhangdi 20120401 end
++
+ // added by zhangdi 20120416 start
+-void Pending_Before_IDLE_to_DCH::expire(Event *e)
++void Pending_Before_IDLE_to_DCH::expire(Event *)
+ {
+     a_->timeout(30);
+ }
+ 
+-void Pending_Before_FACH_to_DCH::expire(Event *e)
++void Pending_Before_FACH_to_DCH::expire(Event *)
+ {
+     a_->timeout(31);
+ }
+ // added by zhangdi 20120416 end
+ 
++
+ void Thp_Report_Timer::expire(Event *)
+ {
+     a_->timeout(0);
+@@ -349,7 +357,7 @@
+ }
+ 
+ 
+-CS::CS():NsObject(), uplink_(0), downlink_(0), bs_demuxer_(0), ue_demuxer_(0), uplink_am_(NULL), downlink_am_(NULL), downlink_um_(NULL), uplink_um_(NULL),DS_T_sRab(this), DS_DCH_Dtimer(this), DS_COMMON_Dtimer(this), PBDDT(this), PBCDT(this), PBI2D(this), PBF2D(this) 
++CS::CS():NsObject(), uplink_(0), downlink_(0), bs_demuxer_(0), ue_demuxer_(0), uplink_am_(NULL), downlink_am_(NULL), downlink_um_(NULL), uplink_um_(NULL),DS_T_sRab(this), DS_DCH_Dtimer(this), DS_COMMON_Dtimer(this), PBDDT(this), PBCDT(this), myflag(0), maxwait(100), WBFT(this), PBI2D(this), PBF2D(this)
+ {
+     bind_time("DOWNSWITCH_TIMER_sRAB_", &DOWNSWITCH_TIMER_sRAB_);
+     bind_time("DOWNSWITCH_DCH_DELAY_", &DOWNSWITCH_DCH_DELAY_);
+@@ -558,6 +566,72 @@
+             uplink_um_->CSwitch(ds_node_bw_, ds_node_tti_);
+             downlink_um_->CSwitch(ds_bs_bw_, ds_bs_tti_);
+         }
++    }// type =8 is for invoke the fast dormancy from outside of cs for top simulation
++    else if (type == 8)
++    {
++        //cout << "timeout:8" << endl;
++        WBFT.resched(0.01);
++        maxwait = 100;
++    }
++    // type = 9 is for Wait_Before_FastD_Timer, added by zhangdi 20120204
++    // just do fast dormancy after there is no data in buffer
++    else if (type == 9)
++    {
++        if (uplink_am_->buff_size() == 0 && downlink_am_->buff_size() == 0)
++        {
++            if (DS_T_sRab.status() == TIMER_PENDING)
++            {
++                DS_T_sRab.cancel();
++            }
++
++            if (DS_COMMON_Dtimer.status() == TIMER_PENDING)
++            {
++                DS_COMMON_Dtimer.cancel();
++            }
++
++            if (DS_DCH_Dtimer.status() == TIMER_PENDING)
++            {
++                DS_DCH_Dtimer.cancel();
++            }
++
++            if (PBI2D.status() == TIMER_PENDING)
++            {
++		cout << "st\t" << "p1c\t" << Scheduler::instance().clock() << endl;
++                PBI2D.cancel();
++            }
++
++            if (PBF2D.status() == TIMER_PENDING)
++            {
++		cout << "st\t" << "p2c\t" << Scheduler::instance().clock() << endl;
++                PBF2D.cancel();
++            }
++
++            if (uplink_->direction() == dedicated && downlink_->direction() == dedicated)
++                cout << "st\t" << "d2i\t" << Scheduler::instance().clock() << endl;
++            else if (uplink_->direction() == common && downlink_->direction() == common)
++                cout << "st\t" << "f2i\t" << Scheduler::instance().clock() << endl;
++
++            //cout << maxwait << endl;
++            uplink_->direction() = idle;
++            downlink_->direction() = idle;
++
++            // I think the below we can not add
++            if ( uplink_am_ != NULL && downlink_am_ !=NULL )
++            {
++                uplink_am_->CSwitch(0.001, 1);
++                downlink_am_->CSwitch(0.001, 1);
++            }
++            else if (uplink_um_ != NULL && downlink_um_ != NULL)
++            {
++                uplink_um_->CSwitch(0.001, 1);
++                downlink_um_->CSwitch(0.001, 1);
++            }
++
++        }
++        else if(maxwait--)
++        {
++            WBFT.resched(0.01);
++        }
+     }
+     else if (type == 5)
+     {
+@@ -615,8 +689,7 @@
+             {
+                 DS_COMMON_Dtimer.cancel();
+             }
+-           
+-            // must check the status of this timer
++
+             if (PBF2D.status() == TIMER_IDLE)
+ 	    {
+                 PBF2D.resched(0.75);
+diff -urN ns-allinone-2.34_org/ns-2.34/umts/tcs.h ns-allinone-2.34_top/ns-2.34/umts/tcs.h
+--- ns-allinone-2.34_org/ns-2.34/umts/tcs.h	2012-04-16 14:10:42.000000000 +0800
++++ ns-allinone-2.34_top/ns-2.34/umts/tcs.h	2012-04-16 14:43:56.000000000 +0800
+@@ -116,8 +116,22 @@
+     CS      *a_;
+ };
+ // added by zhangdi 20120217 end
+-// added by zhangdi 20120416 start
++// added by zhangdi end
+ 
++// added by zhangdi 20120401 start
++class Wait_Before_FastD_Timer:public TimerHandler
++{
++public:
++    Wait_Before_FastD_Timer(CS *a):TimerHandler()
++    {
++        a_ = a;
++} protected:
++    virtual void expire(Event *e);
++    CS      *a_;
++};
++// added by zhangdi 20120401 end
++
++// added by zhangdi 20120416 start
+ class Pending_Before_IDLE_to_DCH:public TimerHandler
+ {
+ public:
+@@ -127,7 +141,6 @@
+ } protected:
+     virtual void expire(Event *e);
+     CS      *a_;
+-
+ };
+ 
+ class Pending_Before_FACH_to_DCH:public TimerHandler
+@@ -140,12 +153,8 @@
+     virtual void expire(Event *e);
+     CS      *a_;
+ };
+-
+ // added by zhangdi 20120416 end
+ 
+-// added by zhangdi end
+-
+-
+ class Thp_Report_Timer:public TimerHandler
+ {
+ public:
+@@ -234,13 +243,16 @@
+     Pending_Before_DCH_Down_Timer PBDDT;
+     Pending_Before_COMMON_Down_Timer PBCDT;
+     // added by zhangdi 20120217 end
++    // added by zhangdi 20120401
++    bool myflag;
++    int maxwait;
++    Wait_Before_FastD_Timer WBFT;
++    // added by zhangdi 20120401
+     
+     // added by zhangdi 20120416 start
+     Pending_Before_IDLE_to_DCH PBI2D;
+     Pending_Before_FACH_to_DCH PBF2D;
+     // added by zhangdi 20120416 end
+-
+-
+ };
+ 
+ class TCM:  public BiConnector
